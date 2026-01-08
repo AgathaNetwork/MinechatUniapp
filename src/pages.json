@@ -3,7 +3,13 @@
 		{
 			"path": "pages/webview/webview",
 			"style": {
-				"navigationBarTitleText": "WebView"
+				"navigationStyle": "custom",
+				"app-plus": {
+					"titleNView": false,
+					"webviewStyles": {
+						"cachemode": "cacheElseNetwork"
+					}
+				}
 			}
 		}
 	],
