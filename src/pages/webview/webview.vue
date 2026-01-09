@@ -11,7 +11,6 @@ export default {
 		return {
 			targetUrl,
 			url: '',
-			statusBarHeight: 0,
 			isDark: false,
 			webviewStyles: {
 				cachemode: 'cacheElseNetwork'
@@ -26,7 +25,6 @@ export default {
 	},
 	onReady() {
 		// #ifdef APP-PLUS
-		this.statusBarHeight = (uni.getSystemInfoSync && uni.getSystemInfoSync().statusBarHeight) || 0
 		this.isDark = this.detectDarkMode()
 		this.applyStatusBarStyle()
 		this.restoreCookiesAndLoad()
@@ -123,7 +121,7 @@ export default {
 							const bg = this.getPageBgColor()
 							child.setStyle({
 								cachemode: 'cacheElseNetwork',
-								top: `${this.statusBarHeight || 0}px`,
+								top: '0px',
 								bottom: '0px',
 								background: bg,
 								webviewBGTransparent: true
