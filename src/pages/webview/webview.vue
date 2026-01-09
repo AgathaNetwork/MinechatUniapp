@@ -5,6 +5,8 @@
 </template>
 
 <script>
+import buildInfo from '../../build-info.json'
+
 export default {
 	data() {
 		const targetUrl = 'https://front-dev.agatha.org.cn/'
@@ -20,7 +22,7 @@ export default {
 	onLoad() {
 		// #ifndef APP-PLUS
 		// 非 App 端无需处理 cookie，直接加载
-		this.url = this.targetUrl
+		this.url = this.buildWebviewUrl()
 		// #endif
 	},
 	onReady() {
@@ -42,6 +44,36 @@ export default {
 		// #endif
 	},
 	methods: {
+		buildWebviewUrl() {
+			try {
+				const t = this.targetUrl || ''
+				const bt = buildInfo && (buildInfo.buildTimeIso || buildInfo.buildTime) ? (buildInfo.buildTimeIso || buildInfo.buildTime) : ''
+				if (!bt) return t
+				const sep = t.includes('?') ? '&' : '?'
+				return `${t}${sep}mc_app_build_time=${encodeURIComponent(String(bt))}`
+			} catch (e) {
+				return this.targetUrl
+			}
+		},
+		injectBuildInfoToChildWebview() {
+			try {
+				// #ifdef APP-PLUS
+				const bt = buildInfo && (buildInfo.buildTimeIso || buildInfo.buildTime) ? (buildInfo.buildTimeIso || buildInfo.buildTime) : ''
+				if (!bt) return
+
+				const currentWebview = this.$scope && this.$scope.$getAppWebview ? this.$scope.$getAppWebview() : null
+				const child = currentWebview && currentWebview.children && currentWebview.children()[0]
+				if (!child || !child.evalJS) return
+
+				const escaped = String(bt).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+				child.evalJS(
+					`try{window.__MC_APP_BUILD_TIME__='${escaped}';localStorage.setItem('mc_app_build_time','${escaped}');}catch(e){}`
+				)
+				// #endif
+			} catch (e) {
+				// ignore
+			}
+		},
 		detectDarkMode() {
 			try {
 				const sys = uni.getSystemInfoSync ? uni.getSystemInfoSync() : null
@@ -108,8 +140,13 @@ export default {
 				// 忽略异常
 			}
 
+
 		// 恢复/设置完成后再加载，尽量保证首次请求就带上 cookie
-		this.url = this.targetUrl
+		this.url = this.buildWebviewUrl()
+		try {
+			setTimeout(() => this.injectBuildInfoToChildWebview(), 600)
+			setTimeout(() => this.injectBuildInfoToChildWebview(), 1500)
+		} catch (e) {}
 		},
 		applyChildWebviewStyles() {
 			try {
@@ -126,6 +163,9 @@ export default {
 								background: bg,
 								webviewBGTransparent: true
 							})
+							try {
+								this.injectBuildInfoToChildWebview()
+							} catch (e) {}
 						}
 					} catch (e) {
 						// ignore
