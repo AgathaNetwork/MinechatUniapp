@@ -1,5 +1,7 @@
 <template>
-	<web-view :src="url" :webview-styles="webviewStyles" />
+	<view class="page" :class="{ dark: isDark }">
+		<web-view :src="url" :webview-styles="webviewStyles" />
+	</view>
 </template>
 
 <script>
@@ -9,6 +11,8 @@ export default {
 		return {
 			targetUrl,
 			url: '',
+			statusBarHeight: 0,
+			isDark: false,
 			webviewStyles: {
 				cachemode: 'cacheElseNetwork'
 			}
@@ -22,8 +26,11 @@ export default {
 	},
 	onReady() {
 		// #ifdef APP-PLUS
+		this.statusBarHeight = (uni.getSystemInfoSync && uni.getSystemInfoSync().statusBarHeight) || 0
+		this.isDark = this.detectDarkMode()
+		this.applyStatusBarStyle()
 		this.restoreCookiesAndLoad()
-		this.applyChildWebviewCacheMode()
+		this.applyChildWebviewStyles()
 		// #endif
 	},
 	onHide() {
@@ -37,6 +44,40 @@ export default {
 		// #endif
 	},
 	methods: {
+		detectDarkMode() {
+			try {
+				const sys = uni.getSystemInfoSync ? uni.getSystemInfoSync() : null
+				if (sys && typeof sys.theme === 'string') {
+					return sys.theme === 'dark'
+				}
+			} catch (e) {
+				// ignore
+			}
+			try {
+				return typeof plus !== 'undefined' && plus.navigator && plus.navigator.getUIStyle
+					? plus.navigator.getUIStyle() === 'dark'
+					: false
+			} catch (e) {
+				return false
+			}
+		},
+		applyStatusBarStyle() {
+			try {
+				// 深色背景用浅色前景（白字），浅色背景用深色前景（黑字）
+				plus.navigator.setStatusBarStyle(this.isDark ? 'light' : 'dark')
+			} catch (e) {
+				// ignore
+			}
+			try {
+				// 让状态栏区域背景跟随页面背景，避免顶部留白突兀
+				plus.navigator.setStatusBarBackground(this.isDark ? '#333' : '#F8F8F8')
+			} catch (e) {
+				// ignore
+			}
+		},
+		getPageBgColor() {
+			return this.isDark ? '#333' : '#F8F8F8'
+		},
 		getCookieStorageKey() {
 			return `persisted_cookies:${this.targetUrl}`
 		},
@@ -72,13 +113,22 @@ export default {
 		// 恢复/设置完成后再加载，尽量保证首次请求就带上 cookie
 		this.url = this.targetUrl
 		},
-		applyChildWebviewCacheMode() {
+		applyChildWebviewStyles() {
 			try {
 				const currentWebview = this.$scope.$getAppWebview()
 				setTimeout(() => {
 					try {
 						const child = currentWebview && currentWebview.children && currentWebview.children()[0]
-						child && child.setStyle && child.setStyle({ cachemode: 'cacheElseNetwork' })
+						if (child && child.setStyle) {
+							const bg = this.getPageBgColor()
+							child.setStyle({
+								cachemode: 'cacheElseNetwork',
+								top: `${this.statusBarHeight || 0}px`,
+								bottom: '0px',
+								background: bg,
+								webviewBGTransparent: true
+							})
+						}
 					} catch (e) {
 						// ignore
 					}
@@ -92,4 +142,13 @@ export default {
 </script>
 
 <style>
+.page {
+	flex: 1;
+	min-height: 100vh;
+	background-color: #f8f8f8;
+}
+
+.page.dark {
+	background-color: #333;
+}
 </style>
