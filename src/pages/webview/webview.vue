@@ -1,11 +1,12 @@
 <template>
 	<view class="page" :class="{ dark: isDark }">
-		<web-view :src="url" :webview-styles="webviewStyles" />
+		<web-view :src="url" :webview-styles="webviewStyles" @message="onWebviewMessage" />
 	</view>
 </template>
 
 <script>
 import buildInfo from '../../build-info.json'
+import { setTokenAndReconnect } from '../../notify'
 
 export default {
 	data() {
@@ -31,6 +32,21 @@ export default {
 		this.applyStatusBarStyle()
 		this.restoreCookiesAndLoad()
 		this.applyChildWebviewStyles()
+			// Start a short-lived debug poll to log current stored token for diagnostics
+			try {
+				this._mc_debug_count = 0
+				this._mc_debug_timer = setInterval(() => {
+					try {
+						const t = uni.getStorageSync('token') || ''
+						console.log('[webview-debug] uni.getStorageSync(\'token\') ->', t && t.slice ? t.slice(0,8)+'...' : t)
+					} catch (e) { console.warn('[webview-debug] getStorageSync failed', e) }
+					this._mc_debug_count++
+					if (this._mc_debug_count >= 6) {
+						clearInterval(this._mc_debug_timer)
+						this._mc_debug_timer = null
+					}
+				}, 2000)
+			} catch (e) {}
 		// #endif
 	},
 	onHide() {
@@ -175,6 +191,30 @@ export default {
 				// ignore
 			}
 		}
+		,onWebviewMessage(e) {
+			try {
+				console.log('[webview] onWebviewMessage event received', e && e.detail ? e.detail : e)
+				let data = null
+				if (e && e.detail && typeof e.detail === 'object') {
+					data = e.detail.data || e.detail
+				} else {
+					data = e
+				}
+				if (typeof data === 'string') {
+					try { data = JSON.parse(data) } catch (err) { console.warn('[webview] could not parse data string', err) }
+				}
+				console.log('[webview] parsed message data', data)
+				if (data && data.type === 'minechat-token') {
+					console.log('[webview] token message received', data.token && data.token.slice ? data.token.slice(0,8)+'...' : data.token)
+					try { uni.setStorageSync('token', String(data.token)); console.log('[webview] stored token via uni.setStorageSync'); } catch (err) { console.warn('[webview] uni.setStorageSync failed', err) }
+					try { setTokenAndReconnect(String(data.token)); console.log('[webview] called setTokenAndReconnect'); } catch (err) { console.warn('[webview] setTokenAndReconnect failed', err) }
+				} else {
+					console.log('[webview] ignored message (not minechat-token)')
+				}
+			} catch (err) {
+				console.warn('[webview] onWebviewMessage handler error', err)
+			}
+		},
 	}
 }
 </script>
