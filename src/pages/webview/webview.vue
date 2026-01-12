@@ -82,9 +82,10 @@ export default {
 				if (!child || !child.evalJS) return
 
 				const escaped = String(bt).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-				child.evalJS(
-					`try{window.__MC_APP_BUILD_TIME__='${escaped}';localStorage.setItem('mc_app_build_time','${escaped}');}catch(e){}`
-				)
+				// Inject build time and a small token-bridge helper into the child webview.
+				// The helper will notify the host when localStorage.token is present or set.
+				const bridgeScript = `try{(function(){window.__MC_APP_BUILD_TIME__='${escaped}';localStorage.setItem('mc_app_build_time','${escaped}');var __last='';function __forward(m){try{if(window.postMessage)window.postMessage(m,'*')}catch(e){}try{if(window.chrome&&window.chrome.webview&&window.chrome.webview.postMessage)window.chrome.webview.postMessage(m)}catch(e){}try{if(window.external&&typeof window.external.invoke==='function')window.external.invoke(JSON.stringify(m))}catch(e){}}function __check(){try{var t=localStorage.getItem('token')||''; if(t && t!==__last){__last=t; __forward({type:'minechat-token',token:t})}}catch(e){}}if(!window.__MC_TOKEN_INTERVAL__){window.__MC_TOKEN_INTERVAL__=setInterval(__check,500);}var __orig=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){try{__orig.apply(this,arguments);}catch(e){} if(String(k)==='token'){__check()}}})();}catch(e){};`
+			child.evalJS(bridgeScript)
 				// #endif
 			} catch (e) {
 				// ignore
@@ -182,6 +183,10 @@ export default {
 							try {
 								this.injectBuildInfoToChildWebview()
 							} catch (e) {}
+							// Start host-side polling to pull token from child localStorage
+							try {
+								this.startChildTokenPoll(child)
+							} catch (e) {}
 						}
 					} catch (e) {
 						// ignore
@@ -190,6 +195,37 @@ export default {
 			} catch (e) {
 				// ignore
 			}
+		},
+		startChildTokenPoll(child) {
+			try {
+				if (!child || !child.evalJS) return
+				// clear existing
+				if (this._mc_child_token_timer) {
+					clearInterval(this._mc_child_token_timer)
+					this._mc_child_token_timer = null
+				}
+				// Try multiple bridge mechanisms from within the child page to notify host.
+				const script = "try{var t=localStorage.getItem('token')||'';try{if(typeof __plusMessage!=='undefined'&&__plusMessage)try{__plusMessage({data:{type:'minechat-token',token:t}});}catch(e){} }catch(e){};try{if(window.postMessage)try{window.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.parent&&window.parent!==window&&window.parent.postMessage)try{window.parent.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.top&&window.top!==window&&window.top.postMessage)try{window.top.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.chrome&&window.chrome.webview&&window.chrome.webview.postMessage)try{window.chrome.webview.postMessage({type:'minechat-token',token:t})}catch(e){} }catch(e){};try{if(window.external&&typeof window.external.invoke==='function')try{window.external.invoke(JSON.stringify({type:'minechat-token',token:t}))}catch(e){} }catch(e){};try{if(typeof plus!=='undefined'&&plus.storage&&plus.storage.setItem)try{plus.storage.setItem('token',t);}catch(e){} }catch(e){} }catch(e){}"
+				// poll every 1000ms
+				this._mc_child_token_timer = setInterval(() => {
+					try {
+						console.log('[webview] startChildTokenPoll: calling child.evalJS to read token')
+						child.evalJS(script)
+					} catch (e) {
+						console.warn('[webview] startChildTokenPoll: child.evalJS failed', e)
+					}
+				}, 1000)
+			} catch (e) {
+				// ignore
+			}
+		},
+		stopChildTokenPoll() {
+			try {
+				if (this._mc_child_token_timer) {
+					clearInterval(this._mc_child_token_timer)
+					this._mc_child_token_timer = null
+				}
+			} catch (e) {}
 		}
 		,onWebviewMessage(e) {
 			try {

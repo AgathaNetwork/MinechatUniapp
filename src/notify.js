@@ -1,37 +1,103 @@
-// notify.js
-// 连接/notify WebSocket并处理通知
-let socket = null;
-let reconnectTimer = null;
-let reconnectAttempts = 0;
-let currentOnNotify = null;
+// notify.js (refactored clean)
+let socket = null
+let reconnectTimer = null
+let reconnectAttempts = 0
+let currentOnNotify = null
+let tokenPollTimer = null
+let lastTokenSeen = ''
+let socketConnectWatchTimer = null
 
-function getToken() {
-  // 假设token存储在localStorage
+function safeGetStorageToken() {
   try {
-    const t = uni.getStorageSync('token') || '';
-    console.log('[notify] getToken ->', t && t.slice ? t.slice(0,8)+'...' : t);
-    return t;
-  } catch (e) {
-    console.warn('[notify] getToken error', e);
-    return '';
-  }
+    if (typeof uni !== 'undefined' && uni.getStorageSync) {
+      const t = uni.getStorageSync('token')
+      if (t) {
+        try { console.log('[notify] safeGetStorageToken found token (uni)', t && t.slice ? t.slice(0,8)+'...' : t) } catch(e){}
+        return String(t)
+      }
+    }
+  } catch (e) {}
+  try {
+    if (typeof plus !== 'undefined' && plus.storage && plus.storage.getItem) {
+      const t = plus.storage.getItem('token')
+      if (t) {
+        try { console.log('[notify] safeGetStorageToken found token (plus.storage)', t && t.slice ? t.slice(0,8)+'...' : t) } catch(e){}
+        return String(t)
+      }
+    }
+  } catch (e) {}
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+      const t = localStorage.getItem('token')
+      if (t) {
+        try { console.log('[notify] safeGetStorageToken found token (localStorage)', t && t.slice ? t.slice(0,8)+'...' : t) } catch(e){}
+        return String(t)
+      }
+    }
+  } catch (e) {}
+  return ''
+}
+
+function writeStorageToken(t) {
+  try { if (typeof uni !== 'undefined' && uni.setStorageSync) uni.setStorageSync('token', String(t)) } catch (e) {}
+  try { if (typeof plus !== 'undefined' && plus.storage && plus.storage.setItem) plus.storage.setItem('token', String(t)) } catch (e) {}
+  try { if (typeof localStorage !== 'undefined' && localStorage.setItem) localStorage.setItem('token', String(t)) } catch (e) {}
+}
+
+function scheduleReconnect() {
+  try {
+    reconnectAttempts = Math.max(1, reconnectAttempts + 1)
+    const base = 3000
+    const maxDelay = 30000
+    const delay = Math.min(Math.floor(base * Math.pow(1.5, reconnectAttempts - 1)), maxDelay)
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      try { connectNotifySocket(currentOnNotify) } catch (e) { scheduleReconnect() }
+    }, delay)
+  } catch (e) {}
+}
+
+function handleIncomingNotify(payload) {
+  try {
+    if (payload && payload.message) {
+      const title = payload.message.content && payload.message.content.text ? payload.message.content.text : '你有新消息'
+      const body = payload.chatId ? `来自会话 ${payload.chatId}` : ''
+      try {
+        if (typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted') {
+          new Notification(title, { body })
+        } else if (typeof window !== 'undefined' && window.Notification && Notification.permission !== 'denied') {
+          Notification.requestPermission().then(p => { if (p === 'granted') new Notification(title, { body }) })
+        }
+      } catch (e) {}
+      try {
+        if (typeof plus !== 'undefined' && plus.nativeUI && plus.nativeUI.createNotification) {
+          plus.nativeUI.createNotification({ title, content: body }).show()
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
 }
 
 function connectNotifySocket(onNotify) {
-  currentOnNotify = onNotify;
+  currentOnNotify = onNotify
   try {
+    const token = safeGetStorageToken() || ''
+    try { console.log('[notify] connectNotifySocket, token present?', token ? 'yes' : 'no') } catch(e){}
+
     if (socket) {
-      try { socket.close(); } catch (e) {}
-      socket = null;
+      try { socket.close && socket.close() } catch (e) {}
+      socket = null
     }
 
-    const token = getToken();
-    // 固定后端 host，参考桌面端实现，优先使用 socket.io-client
-    const wsBase = 'https://front-dev.agatha.org.cn';
-    console.log('[notify] attempting socket.io connect to', wsBase, 'auth.token=', token ? 'yes' : 'no');
+    const wsBase = 'https://front-dev.agatha.org.cn'
+    // try socket.io-client if available
     try {
-      const io = require && typeof require === 'function' ? require('socket.io-client') : (typeof window !== 'undefined' ? window.io : null);
+      const io = (typeof require === 'function') ? require('socket.io-client') : (typeof window !== 'undefined' ? window.io : null)
+      try { console.log('[notify] socket.io-client available?', !!io) } catch(e){}
       if (io) {
+        // follow PC implementation: create socket with auth and rely on connect_error to schedule retry
+        try { console.log('[notify] attempting socket.io connect (auth) to', wsBase) } catch(e){}
         socket = io(wsBase, {
           path: '/api/notify',
           transports: ['websocket'],
@@ -41,147 +107,119 @@ function connectNotifySocket(onNotify) {
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           secure: true,
-        });
-        console.log('[notify] socket.io-client initialized');
-        // socket will be a Socket instance (socket.io)
-        // reuse existing event handlers below by branching on available APIs
+        })
+
         socket.on('connect', () => {
-          console.log('[notify] socket connect');
-          reconnectAttempts = 0;
-          if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-        });
+          reconnectTimer && clearTimeout(reconnectTimer)
+          reconnectTimer = null
+          try {
+            console.log('[notify] socket connect')
+          } catch (e) {}
+        })
+
         socket.on('disconnect', (reason) => {
-          console.warn('[notify] socket disconnect', reason);
-          scheduleReconnect();
-        });
+          try { console.warn('[notify] socket disconnect', reason) } catch(e){}
+        })
+
         socket.on('connect_error', (err) => {
-          console.warn('[notify] socket connect_error', err);
+          try { console.warn('[notify] socket connect_error', err) } catch (e) {}
           if (!socket || !socket.connected) {
-            try { socket && socket.close(); } catch (e) {}
-            socket = null;
+            try { socket && socket.close() } catch (e) {}
+            socket = null
             if (!reconnectTimer) {
-              reconnectTimer = setTimeout(() => { reconnectTimer = null; try { connectNotifySocket(onNotify); } catch (e) { console.error('[notify] reconnect error', e); } }, 5000);
+              reconnectTimer = setTimeout(() => {
+                reconnectTimer = null
+                try { connectNotifySocket(onNotify) } catch (e) { try { console.error('[notify] reconnect error', e) } catch(e){} }
+              }, 5000)
             }
           }
-        });
-        socket.on('notify.message', (payload) => {
-          try { if (typeof onNotify === 'function') onNotify(payload); } catch (e) {}
-        });
-        return;
+        })
+
+        socket.on('notify.message', (payload) => { try { if (typeof onNotify === 'function') onNotify(payload); handleIncomingNotify(payload) } catch (e) {} })
+        return
       }
-    } catch (e) {
-      console.warn('[notify] socket.io-client init failed', e);
-    }
+    } catch (e) {}
 
-    // 回退：使用原生 WebSocket（使用固定的 wss 地址）
+    // fallback native WebSocket
     try {
-      const wsUrl = `${wsBase.replace(/^http/, 'ws')}/api/notify?token=${encodeURIComponent(token)}`;
-      console.log('[notify] fallback connecting to', wsUrl);
-      socket = new WebSocket(wsUrl);
-    } catch (e) {
-      console.warn('[notify] fallback WebSocket failed', e);
-      scheduleReconnect();
-      return;
-    }
+      const wsUrl = `${wsBase.replace(/^http/, 'ws')}/api/notify?token=${encodeURIComponent(token)}`
+      socket = new WebSocket(wsUrl)
+    } catch (e) { scheduleReconnect(); return }
 
-    socket.onopen = () => {
-      console.log('[notify] socket open');
-      // 连接成功，重置重试计数
-      reconnectAttempts = 0;
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    };
-
-    socket.onclose = (ev) => {
-      console.warn('[notify] socket closed', ev && ev.code, ev && ev.reason);
-      scheduleReconnect();
-    };
-
-    socket.onerror = (ev) => {
-      console.warn('[notify] socket error', ev);
-      // 尝试关闭并等待 onclose 触发重连
-      try { socket.close(); } catch (e) {}
-    };
-
+    socket.onopen = () => { reconnectAttempts = 0; if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null } }
+    socket.onclose = () => { scheduleReconnect() }
+    socket.onerror = () => { try { socket.close && socket.close() } catch (e) {} }
     socket.onmessage = (evt) => {
       try {
-        const data = JSON.parse(evt.data);
-        if (data.event === 'notify.message' && typeof onNotify === 'function') {
-          onNotify(data.payload);
+        const data = JSON.parse(evt.data)
+        if (data && data.event === 'notify.message') {
+          if (typeof onNotify === 'function') onNotify(data.payload)
+          handleIncomingNotify(data.payload)
         }
-      } catch (e) {
-        // ignore
-      }
-    };
-  } catch (e) {
-    console.warn('[notify] connect exception', e);
-    scheduleReconnect();
-  }
+      } catch (e) {}
+    }
+  } catch (e) { scheduleReconnect() }
 }
 
-function scheduleReconnect() {
+export function startNotifyListener(onNotify) {
   try {
-    reconnectAttempts = Math.max(1, reconnectAttempts + 1);
-    const base = 3000; // 3s
-    const maxDelay = 30000; // 30s
-    const delay = Math.min(Math.floor(base * Math.pow(1.5, reconnectAttempts - 1)), maxDelay);
-    console.log('[notify] schedule reconnect in', delay, 'ms (attempt', reconnectAttempts, ')');
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(() => {
-      try { connectNotifySocket(currentOnNotify); } catch (e) { scheduleReconnect(); }
-    }, delay);
-  } catch (e) {
-    // ignore
-  }
-}
+    if (typeof onNotify === 'function') currentOnNotify = onNotify
 
-export function startNotifyListener() {
-  connectNotifySocket((payload) => {
-    // 调用系统通知
-    if (payload && payload.message) {
-      console.log('[notify] got notification', payload);
-      const title = payload.message.content?.text || '你有新消息';
-      const options = {
-        body: `来自会话 ${payload.chatId}`,
-        icon: '/static/logo.png',
-      };
-      // #ifdef H5
-      if (window.Notification && Notification.permission === 'granted') {
-        new Notification(title, options);
-      } else if (window.Notification && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification(title, options);
+    // start polling storage for token changes
+    try {
+      if (tokenPollTimer) clearInterval(tokenPollTimer)
+      lastTokenSeen = safeGetStorageToken() || ''
+      tokenPollTimer = setInterval(() => {
+        try {
+          const t = safeGetStorageToken() || ''
+          if (t && t !== lastTokenSeen) {
+            try { console.log('[notify] tokenPoll detected new token', t && t.slice ? t.slice(0,8)+'...' : t) } catch(e){}
+            lastTokenSeen = t
+            try { setTokenAndReconnect(t) } catch (e) {}
           }
-        });
+        } catch (e) {}
+      }, 1500)
+    } catch (e) {}
+
+    // listen for window.postMessage tokens (H5 login page)
+    try {
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('message', function (ev) {
+          try {
+            const data = ev && ev.data
+            if (data && data.type === 'minechat-token' && data.token) {
+              try { setTokenAndReconnect(String(data.token)) } catch (e) {}
+            }
+          } catch (e) {}
+        }, false)
       }
-      // #endif
-      // #ifdef APP-PLUS
-      plus.nativeUI.createNotification({
-        title,
-        content: options.body,
-        icon: options.icon
-      }).show();
-      // #endif
-    }
-  });
+    } catch (e) {}
+
+    // initial connect attempt
+    connectNotifySocket(currentOnNotify)
+  } catch (e) {}
 }
 
-export function setTokenAndReconnect(token) {
+export function setTokenAndReconnect(newToken) {
   try {
-    if (typeof token === 'string') {
-      uni.setStorageSync('token', token);
-    }
+    if (typeof newToken === 'string') writeStorageToken(newToken)
+    try { console.log('[notify] setTokenAndReconnect called with token', newToken && newToken.slice ? newToken.slice(0,8)+'...' : newToken) } catch(e){}
   } catch (e) {}
   try {
-    console.log('[notify] setTokenAndReconnect called with', token && token.slice ? token.slice(0,8)+'...' : token);
-    // 强制重新连接以使用新的 token
-    if (socket) {
-      try { socket.close(); } catch (e) {}
-      socket = null;
-    }
-    reconnectTimer && clearTimeout(reconnectTimer);
-    // reset attempts to try immediately
-    reconnectAttempts = 0;
-    connectNotifySocket(currentOnNotify);
-  } catch (e) { console.warn('[notify] setTokenAndReconnect error', e); }
+    reconnectAttempts = 0
+    if (socket) { try { socket.close && socket.close() } catch (e) {} socket = null }
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+    connectNotifySocket(currentOnNotify)
+  } catch (e) {}
 }
+
+export function stopNotifyListener() {
+  try {
+    if (tokenPollTimer) { clearInterval(tokenPollTimer); tokenPollTimer = null }
+    if (socket) { try { socket.close && socket.close() } catch (e) {} socket = null }
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+    if (socketConnectWatchTimer) { clearTimeout(socketConnectWatchTimer); socketConnectWatchTimer = null }
+  } catch (e) {}
+}
+
+export default { startNotifyListener, setTokenAndReconnect, stopNotifyListener }
