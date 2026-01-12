@@ -58,6 +58,51 @@ function scheduleReconnect() {
   } catch (e) {}
 }
 
+// Diagnostic HTTP probe to check /api/notify reachability (will not affect normal flow)
+function diagFetchNotify(wsBase) {
+  try {
+    const url = (wsBase || '').replace(/\/$/, '') + '/api/notify/?EIO=4&transport=polling'
+    // Prefer uni.request in App-Plus environment for reliable network probing
+    if (typeof uni !== 'undefined' && typeof uni.request === 'function') {
+      try {
+        uni.request({
+          url: url,
+          method: 'GET',
+          withCredentials: true,
+          success: (res) => {
+            try { console.log('[notify][diag] uni.request /api/notify status', res && res.statusCode, typeof res.data === 'string' ? String(res.data).slice(0,200) : res.data) } catch(e){}
+          },
+          fail: (err) => { try { console.warn('[notify][diag] uni.request failed', err) } catch(e){} }
+        })
+      } catch (e) { try { console.warn('[notify][diag] uni.request threw', e) } catch(e){} }
+      return
+    }
+
+    // Fallback to fetch / XHR when uni.request is not available
+    if (typeof fetch === 'function') {
+      fetch(url, { method: 'GET', credentials: 'include' })
+        .then(r => {
+          try { console.log('[notify][diag] fetch /api/notify status', r.status, r.statusText) } catch(e){}
+          return r.text().then(t => { try { console.log('[notify][diag] fetch body (truncated):', String(t || '').slice(0,200)) } catch(e){} })
+        })
+        .catch(err => { try { console.warn('[notify][diag] fetch failed', err) } catch(e){} })
+    } else if (typeof XMLHttpRequest === 'function') {
+      try {
+        const xr = new XMLHttpRequest()
+        xr.open('GET', url, true)
+        xr.withCredentials = true
+        xr.onreadystatechange = function () {
+          if (xr.readyState === 4) {
+            try { console.log('[notify][diag] xhr status', xr.status, xr.statusText) } catch(e){}
+          }
+        }
+        xr.onerror = function (e) { try { console.warn('[notify][diag] xhr error', e) } catch(e){} }
+        xr.send()
+      } catch (e) { try { console.warn('[notify][diag] xhr probe failed', e) } catch(e){} }
+    }
+  } catch (e) {}
+}
+
 function handleIncomingNotify(payload) {
   try {
     if (payload && payload.message) {
@@ -98,16 +143,40 @@ function connectNotifySocket(onNotify) {
       if (io) {
         // follow PC implementation: create socket with auth and rely on connect_error to schedule retry
         try { console.log('[notify] attempting socket.io connect (auth) to', wsBase) } catch(e){}
-        socket = io(wsBase, {
-          path: '/api/notify',
-          transports: ['websocket'],
+        const socketOpts = {
+          path: '/api/notify/',
+          transports: ['polling'],
+          query: { token },
+          transportOptions: {
+            polling: {
+              withCredentials: true,
+              extraHeaders: {
+                // help some proxies/edge-caches to forward requests correctly
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            }
+          },
           auth: { token },
           reconnection: true,
           reconnectionAttempts: Infinity,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           secure: true,
-        })
+          timeout: 20000,
+          upgrade: false,
+          forceNew: true,
+        }
+        try { console.log('[notify] socket options', socketOpts) } catch (e) {}
+        socket = io(wsBase, socketOpts)
+
+        // Attach engine/manager level listeners when available for deeper diagnostics
+        try {
+          const engine = socket && socket.io
+          if (engine && engine.on) {
+            try { engine.on('packet', (pkt) => { try { console.log('[notify][engine] packet', pkt) } catch(e){} }) } catch(e){}
+            try { engine.on('upgrade_error', (err) => { try { console.warn('[notify][engine] upgrade_error', err) } catch(e){} }) } catch(e){}
+          }
+        } catch (e) {}
 
         socket.on('connect', () => {
           reconnectTimer && clearTimeout(reconnectTimer)
@@ -123,6 +192,13 @@ function connectNotifySocket(onNotify) {
 
         socket.on('connect_error', (err) => {
           try { console.warn('[notify] socket connect_error', err) } catch (e) {}
+          try {
+            // log common error properties
+            try { console.warn('[notify] connect_error.message', err && err.message) } catch(e){}
+            try { console.warn('[notify] connect_error.data', err && err.data) } catch(e){}
+          } catch(e){}
+          // perform an HTTP probe to /api/notify to see if the endpoint is reachable (diagnostic only)
+          try { diagFetchNotify(wsBase) } catch(e){}
           if (!socket || !socket.connected) {
             try { socket && socket.close() } catch (e) {}
             socket = null
@@ -142,7 +218,7 @@ function connectNotifySocket(onNotify) {
 
     // fallback native WebSocket
     try {
-      const wsUrl = `${wsBase.replace(/^http/, 'ws')}/api/notify?token=${encodeURIComponent(token)}`
+      const wsUrl = `${wsBase.replace(/^http/, 'ws')}/api/notify/?token=${encodeURIComponent(token)}`
       socket = new WebSocket(wsUrl)
     } catch (e) { scheduleReconnect(); return }
 

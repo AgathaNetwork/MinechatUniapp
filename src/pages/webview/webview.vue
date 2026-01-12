@@ -33,20 +33,20 @@ export default {
 		this.restoreCookiesAndLoad()
 		this.applyChildWebviewStyles()
 			// Start a short-lived debug poll to log current stored token for diagnostics
-			try {
-				this._mc_debug_count = 0
-				this._mc_debug_timer = setInterval(() => {
 					try {
-						const t = uni.getStorageSync('token') || ''
-						console.log('[webview-debug] uni.getStorageSync(\'token\') ->', t && t.slice ? t.slice(0,8)+'...' : t)
-					} catch (e) { console.warn('[webview-debug] getStorageSync failed', e) }
-					this._mc_debug_count++
-					if (this._mc_debug_count >= 6) {
-						clearInterval(this._mc_debug_timer)
-						this._mc_debug_timer = null
-					}
-				}, 2000)
-			} catch (e) {}
+						this._mc_debug_count = 0
+						this._mc_debug_timer = setInterval(() => {
+							try {
+								const t = uni.getStorageSync('token') || ''
+								// console.log('[webview-debug] uni.getStorageSync(\'token\') ->', t && t.slice ? t.slice(0,8)+'...' : t)
+							} catch (e) { /* console.warn('[webview-debug] getStorageSync failed', e) */ }
+							this._mc_debug_count++
+							if (this._mc_debug_count >= 6) {
+								clearInterval(this._mc_debug_timer)
+								this._mc_debug_timer = null
+							}
+						}, 2000)
+					} catch (e) {}
 		// #endif
 	},
 	onHide() {
@@ -207,14 +207,14 @@ export default {
 				// Try multiple bridge mechanisms from within the child page to notify host.
 				const script = "try{var t=localStorage.getItem('token')||'';try{if(typeof __plusMessage!=='undefined'&&__plusMessage)try{__plusMessage({data:{type:'minechat-token',token:t}});}catch(e){} }catch(e){};try{if(window.postMessage)try{window.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.parent&&window.parent!==window&&window.parent.postMessage)try{window.parent.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.top&&window.top!==window&&window.top.postMessage)try{window.top.postMessage({type:'minechat-token',token:t},'*')}catch(e){} }catch(e){};try{if(window.chrome&&window.chrome.webview&&window.chrome.webview.postMessage)try{window.chrome.webview.postMessage({type:'minechat-token',token:t})}catch(e){} }catch(e){};try{if(window.external&&typeof window.external.invoke==='function')try{window.external.invoke(JSON.stringify({type:'minechat-token',token:t}))}catch(e){} }catch(e){};try{if(typeof plus!=='undefined'&&plus.storage&&plus.storage.setItem)try{plus.storage.setItem('token',t);}catch(e){} }catch(e){} }catch(e){}"
 				// poll every 1000ms
-				this._mc_child_token_timer = setInterval(() => {
-					try {
-						console.log('[webview] startChildTokenPoll: calling child.evalJS to read token')
-						child.evalJS(script)
-					} catch (e) {
-						console.warn('[webview] startChildTokenPoll: child.evalJS failed', e)
-					}
-				}, 1000)
+					this._mc_child_token_timer = setInterval(() => {
+						try {
+							// console.log('[webview] startChildTokenPoll: calling child.evalJS to read token')
+							child.evalJS(script)
+						} catch (e) {
+							/* console.warn('[webview] startChildTokenPoll: child.evalJS failed', e) */
+						}
+					}, 1000)
 			} catch (e) {
 				// ignore
 			}
@@ -228,28 +228,28 @@ export default {
 			} catch (e) {}
 		}
 		,onWebviewMessage(e) {
-			try {
-				console.log('[webview] onWebviewMessage event received', e && e.detail ? e.detail : e)
-				let data = null
-				if (e && e.detail && typeof e.detail === 'object') {
-					data = e.detail.data || e.detail
-				} else {
-					data = e
-				}
-				if (typeof data === 'string') {
-					try { data = JSON.parse(data) } catch (err) { console.warn('[webview] could not parse data string', err) }
-				}
-				console.log('[webview] parsed message data', data)
-				if (data && data.type === 'minechat-token') {
-					console.log('[webview] token message received', data.token && data.token.slice ? data.token.slice(0,8)+'...' : data.token)
-					try { uni.setStorageSync('token', String(data.token)); console.log('[webview] stored token via uni.setStorageSync'); } catch (err) { console.warn('[webview] uni.setStorageSync failed', err) }
-					try { setTokenAndReconnect(String(data.token)); console.log('[webview] called setTokenAndReconnect'); } catch (err) { console.warn('[webview] setTokenAndReconnect failed', err) }
-				} else {
-					console.log('[webview] ignored message (not minechat-token)')
-				}
-			} catch (err) {
-				console.warn('[webview] onWebviewMessage handler error', err)
-			}
+					try {
+						// console.log('[webview] onWebviewMessage event received', e && e.detail ? e.detail : e)
+						let data = null
+						if (e && e.detail && typeof e.detail === 'object') {
+							data = e.detail.data || e.detail
+						} else {
+							data = e
+						}
+						if (typeof data === 'string') {
+							try { data = JSON.parse(data) } catch (err) { /* console.warn('[webview] could not parse data string', err) */ }
+						}
+						// console.log('[webview] parsed message data', data)
+						if (data && data.type === 'minechat-token') {
+							// console.log('[webview] token message received', data.token && data.token.slice ? data.token.slice(0,8)+'...' : data.token)
+							try { uni.setStorageSync('token', String(data.token)); /* console.log('[webview] stored token via uni.setStorageSync'); */ } catch (err) { /* console.warn('[webview] uni.setStorageSync failed', err) */ }
+							try { setTokenAndReconnect(String(data.token)); /* console.log('[webview] called setTokenAndReconnect'); */ } catch (err) { /* console.warn('[webview] setTokenAndReconnect failed', err) */ }
+						} else {
+							// console.log('[webview] ignored message (not minechat-token)')
+						}
+					} catch (err) {
+						/* console.warn('[webview] onWebviewMessage handler error', err) */
+					}
 		},
 	}
 }
