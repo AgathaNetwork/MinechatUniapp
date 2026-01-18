@@ -4,6 +4,8 @@ let socket = null;
 let reconnectTimer = null;
 let onNotifyCallback = null;
 let currentToken = '';
+let appForeground = true;
+let appStateInited = false;
 
 function safeCloseSocket(s) {
   if (!s) return;
@@ -24,6 +26,83 @@ function logDebug(msg) {
     uni.setStorageSync(key, arr);
   } catch (e) {}
   console.log('[notify]', msg);
+}
+
+function initAppStateTrackingOnce() {
+  if (appStateInited) return;
+  appStateInited = true;
+  try {
+    // #ifdef APP-PLUS
+    try {
+      if (typeof plus !== 'undefined' && plus.runtime && typeof plus.runtime.isApplicationForeground === 'function') {
+        appForeground = !!plus.runtime.isApplicationForeground();
+      }
+    } catch (e) {}
+    // #endif
+
+    if (uni && typeof uni.onAppShow === 'function') {
+      uni.onAppShow(() => { appForeground = true; });
+    }
+    if (uni && typeof uni.onAppHide === 'function') {
+      uni.onAppHide(() => { appForeground = false; });
+    }
+  } catch (e) {}
+}
+
+function getForegroundState() {
+  // #ifdef APP-PLUS
+  try {
+    if (typeof plus !== 'undefined' && plus.runtime && typeof plus.runtime.isApplicationForeground === 'function') {
+      return !!plus.runtime.isApplicationForeground();
+    }
+  } catch (e) {}
+  // #endif
+  return !!appForeground;
+}
+
+function showSystemNotification(title, body, payload) {
+  const t = title || 'Minechat';
+  const text = (body && String(body)) || '';
+
+  // #ifdef APP-PLUS
+  try {
+    if (typeof plus !== 'undefined' && plus.push && typeof plus.push.createMessage === 'function') {
+      // createMessage: content, payload, options
+      const p = payload ? JSON.stringify(payload) : '';
+      plus.push.createMessage(text || '你有新消息', p, { title: t });
+      logDebug('[notify] showSystemNotification(APP-PLUS): ' + t + ' / ' + text);
+      return true;
+    }
+    logDebug('[notify] showSystemNotification(APP-PLUS) unavailable: plus.push.createMessage not found');
+  } catch (e) {
+    logDebug('[notify] showSystemNotification(APP-PLUS) error: ' + (e?.message || e));
+  }
+  return false;
+  // #endif
+
+  // #ifdef H5
+  try {
+    if (typeof Notification !== 'undefined') {
+      if (Notification.permission === 'granted') {
+        const n = new Notification(t, { body: text || '你有新消息' });
+        try {
+          n.onclick = () => {
+            try { window && window.focus && window.focus(); } catch (e) {}
+          };
+        } catch (e) {}
+        logDebug('[notify] showSystemNotification(H5): ' + t + ' / ' + text);
+        return true;
+      }
+      if (Notification.permission === 'default') {
+        // 非用户手势下可能会被浏览器拒绝；这里尽力请求一次。
+        Notification.requestPermission().catch(() => {});
+      }
+    }
+  } catch (e) {
+    // fallthrough
+  }
+  return false;
+  // #endif
 }
 
 async function getToken() {
@@ -154,6 +233,7 @@ function showMobileNotification(title, body) {
 }
 
 function startNotifyListener() {
+  initAppStateTrackingOnce();
   const onNotify = (payload) => {
     try {
       logDebug('[notify] payload: ' + JSON.stringify(payload || {}));
@@ -166,7 +246,31 @@ function startNotifyListener() {
         else messageText = '';
 
         const title = payload.chatName || (payload.chat && payload.chat.name) || `会话 ${payload.chatId}`;
-        showMobileNotification(title, messageText);
+        const foreground = getForegroundState();
+        logDebug(`[notify] decide notify channel: foreground=${foreground} (flag=${appForeground})`);
+
+        // #ifdef APP-PLUS
+        // App-Plus：无论前后台都尝试发系统通知；仅在前台再补一个 toast。
+        const ok = showSystemNotification(title, messageText, payload);
+        logDebug('[notify] system notify dispatched=' + ok);
+        if (foreground) {
+          // showMobileNotification(title, messageText);
+        } else if (!ok) {
+          // 系统通知失败时（极少数机型/权限问题），至少留一条日志
+          logDebug('[notify] system notify failed while background');
+        }
+        // #endif
+
+        // #ifndef APP-PLUS
+        // 其他平台：前台 toast，后台尽力系统通知
+        if (foreground) {
+          // showMobileNotification(title, messageText);
+        } else {
+          const ok2 = showSystemNotification(title, messageText, payload);
+          logDebug('[notify] system notify dispatched=' + ok2);
+          // if (!ok2) showMobileNotification(title, messageText);
+        }
+        // #endif
       }
     } catch (e) { console.warn('[notify] onNotify error', e); }
   };
