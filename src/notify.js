@@ -5,6 +5,16 @@ let reconnectTimer = null;
 let onNotifyCallback = null;
 let currentToken = '';
 
+function safeCloseSocket(s) {
+  if (!s) return;
+  try {
+    if (typeof s.disconnect === 'function') return s.disconnect();
+  } catch (e) {}
+  try {
+    if (typeof s.close === 'function') return s.close();
+  } catch (e) {}
+}
+
 function logDebug(msg) {
   try {
     const key = 'notify-debug';
@@ -28,7 +38,7 @@ async function getToken() {
 async function connectNotifySocket(onNotify) {
   onNotifyCallback = onNotify || onNotifyCallback;
   if (socket) {
-    try { socket.close(); } catch (e) {}
+    safeCloseSocket(socket);
     socket = null;
   }
   if (reconnectTimer) {
@@ -42,25 +52,59 @@ async function connectNotifySocket(onNotify) {
   logDebug(`[notify] socket create: ${wsBase} path=/api/notify auth.token=${token ? 'yes' : 'no'}`);
 
   let io;
+  // #ifdef H5
   try {
     io = require('socket.io-client');
+    if (io && io.io) io = io.io;
+    logDebug('[notify] using socket.io-client (H5)');
   } catch (e) {
     logDebug('[notify] require socket.io-client failed: ' + (e?.message || e));
     console.error('[notify] require socket.io-client failed', e);
     return;
   }
+  // #endif
+
+  // #ifndef H5
+  try {
+    io = require('@hyoga/uni-socket.io');
+    if (io && io.io) io = io.io;
+    logDebug('[notify] using @hyoga/uni-socket.io (non-H5)');
+  } catch (e) {
+    logDebug('[notify] require @hyoga/uni-socket.io failed: ' + (e?.message || e));
+    console.error('[notify] require @hyoga/uni-socket.io failed', e);
+    return;
+  }
+  // #endif
 
   try {
-    socket = io(wsBase, {
+    // 说明：
+    // - 后端实际是 path '/notify'；这里使用 '/api/notify' 以便走 front-dev 的反代重写。
+    // - uni-app 下官方 socket.io-client 常因缺少 XHR/WebSocket 全局实现而失败；适配包会使用 uni.request/uni.connectSocket。
+    // - token 同时放在 auth 与 query，避免某些端不支持 auth。
+    const options = {
       path: '/api/notify',
-      transports: ['websocket'],
       auth: { token },
+      query: { token },
+      timeout: 20000,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      secure: true,
-    });
+    };
+
+    // #ifdef H5
+    // 浏览器端允许 polling 作为降级
+    options.transports = ['websocket', 'polling'];
+    options.upgrade = true;
+    // #endif
+
+    // #ifndef H5
+    // App/小程序端优先 websocket，避免 polling 兼容性差异
+    options.transports = ['websocket'];
+    options.upgrade = false;
+    // #endif
+
+    socket = io(wsBase, options);
   } catch (e) {
     logDebug('[notify] socket create error: ' + (e?.message || e));
     console.error('[notify] socket create error', e);
@@ -82,7 +126,7 @@ async function connectNotifySocket(onNotify) {
     logDebug('[notify] socket connect_error: ' + (err?.message || err));
     console.log('[notify] socket connect_error', err);
     if (!socket || !socket.connected) {
-      try { socket && socket.close(); } catch (e) {}
+      safeCloseSocket(socket);
       socket = null;
       if (!reconnectTimer) {
         reconnectTimer = setTimeout(() => {
@@ -136,21 +180,11 @@ function setTokenAndReconnect(token) {
     uni.setStorageSync('token', t);
     currentToken = t;
     logDebug('[notify] setTokenAndReconnect token set');
-    if (socket) {
-      try {
-        // update auth and reconnect
-        socket.auth = { token: t };
-        socket.disconnect();
-        socket.connect();
-        logDebug('[notify] socket reconnected with new token');
-        return;
-      } catch (e) {
-        logDebug('[notify] setTokenAndReconnect reconnect error: ' + (e?.message || e));
-        try { socket.close(); } catch (e) {}
-        socket = null;
-      }
-    }
-    // if no socket, create one using existing onNotifyCallback
+    // uni-app 各端对“动态更新 auth 并 reconnect”的支持不一致，直接重建连接最稳。
+    try {
+      safeCloseSocket(socket);
+    } catch (e) {}
+    socket = null;
     connectNotifySocket(onNotifyCallback);
   } catch (e) { console.error('[notify] setTokenAndReconnect error', e); }
 }
