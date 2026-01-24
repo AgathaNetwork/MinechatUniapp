@@ -128,6 +128,12 @@ function initAppStateTrackingOnce() {
         appForeground = true;
         // 回到前台后 push cid 可能才就绪/网络才恢复
         kickCidRegisterLoop('appShow');
+        // 某些 Android 机型后台会冻结 JS/断开网络栈，回前台时主动重连更稳。
+        try {
+          if (!socket || !socket.connected) {
+            connectNotifySocket(onNotifyCallback);
+          }
+        } catch (e) {}
       });
     }
     if (uni && typeof uni.onAppHide === 'function') {

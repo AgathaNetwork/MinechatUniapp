@@ -1,0 +1,7 @@
+{
+  "id": "MinechatKeepAlive",
+  "name": "MinechatKeepAlive",
+  "version": "1.0.0",
+  "description": "Minechat Android 开机自启 + 前台常驻服务（带常驻通知）",
+  "platforms": ["android"]
+}

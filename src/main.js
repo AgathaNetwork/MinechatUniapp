@@ -4,6 +4,7 @@ import App from './App'
 import './uni.promisify.adaptor'
 import { startNotifyListener } from './notify'
 import { setTokenAndReconnect } from './notify'
+import { startAndroidKeepAliveService } from './keepAlive'
 
 Vue.config.productionTip = false
 
@@ -18,6 +19,11 @@ app.$mount()
 
 // 启动通知监听
 startNotifyListener();
+
+// #ifdef APP-PLUS
+// Android：启动前台常驻服务（开机自启由原生 BootReceiver 触发，这里是运行期兜底）
+try { startAndroidKeepAliveService(); } catch (e) {}
+// #endif
 
 // 在 H5 / 浏览器 环境中，监听来自子页面的 postMessage（登录页会尝试 postMessage）
 try {

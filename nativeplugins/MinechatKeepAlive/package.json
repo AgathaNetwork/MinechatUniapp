@@ -1,0 +1,20 @@
+{
+  "name": "minechat-keepalive",
+  "id": "MinechatKeepAlive",
+  "version": "1.0.0",
+  "description": "Minechat Android 开机自启 + 前台常驻服务（带常驻通知）",
+  "_dp_type": "nativeplugin",
+  "_dp_nativeplugin": {
+    "android": {
+      "plugins": [
+        {
+          "type": "module",
+          "name": "MinechatKeepAlive",
+          "class": "cn.org.agatha.minechat.keepalive.uni.MinechatKeepAliveModule"
+        }
+      ],
+      "integrateType": "aar",
+      "minSdkVersion": "21"
+    }
+  }
+}

@@ -118,6 +118,22 @@
                     }
                 }
             }
+        },
+        "nativePlugins" : {
+            "MinechatKeepAlive" : {
+                "__plugin_info__" : {
+                    "name" : "minechat-keepalive",
+                    "description" : "Minechat Android 开机自启 + 前台常驻服务（带常驻通知）",
+                    "platforms" : "Android",
+                    "url" : "",
+                    "android_package_name" : "",
+                    "ios_bundle_id" : "",
+                    "isCloud" : false,
+                    "bought" : -1,
+                    "pid" : "",
+                    "parameters" : {}
+                }
+            }
         }
     },
     "quickapp" : {},
