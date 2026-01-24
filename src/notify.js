@@ -6,6 +6,89 @@ let onNotifyCallback = null;
 let currentToken = '';
 let appForeground = true;
 let appStateInited = false;
+let pushRegisterInFlight = false;
+let pushRegisterTimer = null;
+let pushRegisterDelayMs = 1500;
+let pushRegisterLastAttemptAt = 0;
+let pushRegisterLastOkAt = 0;
+let networkListenerInited = false;
+
+const WS_BASE = 'https://front-dev.agatha.org.cn';
+
+function getApiBase() {
+  // front-dev 上通常会把 /api 反代到后端
+  return WS_BASE + '/api';
+}
+
+function maskCid(cid) {
+  const s = String(cid || '').trim();
+  if (!s) return '';
+  if (s.length <= 12) return s;
+  return `${s.slice(0, 6)}...${s.slice(-4)}`;
+}
+
+function getRegisteredCidFromStorage() {
+  try {
+    const raw = uni.getStorageSync('unipush-cid-registered');
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw.trim();
+    if (raw && typeof raw === 'object' && raw.cid) return String(raw.cid).trim();
+  } catch (e) {}
+  return '';
+}
+
+function setRegisteredCidToStorage(cid) {
+  try {
+    uni.setStorageSync('unipush-cid-registered', { cid: String(cid || '').trim(), at: Date.now(), apiBase: getApiBase() });
+  } catch (e) {
+    try { uni.setStorageSync('unipush-cid-registered', String(cid || '').trim()); } catch (e2) {}
+  }
+}
+
+function clearRegisteredCidStorage() {
+  try { uni.removeStorageSync('unipush-cid-registered'); } catch (e) {}
+}
+
+function stopCidRegisterLoop() {
+  if (pushRegisterTimer) {
+    try { clearTimeout(pushRegisterTimer); } catch (e) {}
+    pushRegisterTimer = null;
+  }
+}
+
+function scheduleCidRegisterLoop(reason) {
+  stopCidRegisterLoop();
+  const delay = Math.max(800, Math.min(60_000, pushRegisterDelayMs || 1500));
+  logDebug(`[notify] scheduleCidRegisterLoop: delay=${delay}ms reason=${reason}`);
+  pushRegisterTimer = setTimeout(() => {
+    pushRegisterTimer = null;
+    try { registerUniPushCidOnce(reason); } catch (e) {}
+  }, delay);
+}
+
+function kickCidRegisterLoop(reason) {
+  // 强制快速尝试一次（但仍避免过于频繁）
+  pushRegisterDelayMs = 1500;
+  scheduleCidRegisterLoop(reason);
+}
+
+function initNetworkTrackingOnce() {
+  if (networkListenerInited) return;
+  networkListenerInited = true;
+  try {
+    if (uni && typeof uni.onNetworkStatusChange === 'function') {
+      uni.onNetworkStatusChange((res) => {
+        try {
+          const isConnected = !!(res && res.isConnected);
+          logDebug('[notify] network change: isConnected=' + isConnected + ' type=' + (res && res.networkType));
+          if (isConnected) {
+            kickCidRegisterLoop('networkRestored');
+          }
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+}
 
 function safeCloseSocket(s) {
   if (!s) return;
@@ -41,7 +124,11 @@ function initAppStateTrackingOnce() {
     // #endif
 
     if (uni && typeof uni.onAppShow === 'function') {
-      uni.onAppShow(() => { appForeground = true; });
+      uni.onAppShow(() => {
+        appForeground = true;
+        // 回到前台后 push cid 可能才就绪/网络才恢复
+        kickCidRegisterLoop('appShow');
+      });
     }
     if (uni && typeof uni.onAppHide === 'function') {
       uni.onAppHide(() => { appForeground = false; });
@@ -127,7 +214,7 @@ async function connectNotifySocket(onNotify) {
 
   const token = await getToken();
   currentToken = token;
-  const wsBase = 'https://front-dev.agatha.org.cn';
+  const wsBase = WS_BASE;
   logDebug(`[notify] socket create: ${wsBase} path=/api/notify auth.token=${token ? 'yes' : 'no'}`);
 
   let io;
@@ -194,16 +281,21 @@ async function connectNotifySocket(onNotify) {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     logDebug('[notify] socket connect');
     console.log('[notify] socket connect');
+    // 连接成功时也触发一次 cid 注册兜底（若之前没成功）
+    kickCidRegisterLoop('socketConnect');
   });
 
   socket.on('disconnect', (reason) => {
     logDebug('[notify] socket disconnect: ' + reason);
     console.log('[notify] socket disconnect', reason);
+    // 断联时继续尝试注册（用户希望断联后也能走离线推送）
+    kickCidRegisterLoop('socketDisconnect');
   });
 
   socket.on('connect_error', (err) => {
     logDebug('[notify] socket connect_error: ' + (err?.message || err));
     console.log('[notify] socket connect_error', err);
+    kickCidRegisterLoop('socketConnectError');
     if (!socket || !socket.connected) {
       safeCloseSocket(socket);
       socket = null;
@@ -221,6 +313,125 @@ async function connectNotifySocket(onNotify) {
   });
 }
 
+async function getUniPushCidAppPlus() {
+  // #ifdef APP-PLUS
+  try {
+    if (typeof plus === 'undefined' || !plus.push) return '';
+    // plus.push.getClientInfo().clientid
+    const info = plus.push.getClientInfo && plus.push.getClientInfo();
+    const cid = info && (info.clientid || info.clientId || info.cid);
+    return String(cid || '').trim();
+  } catch (e) {
+    return '';
+  }
+  // #endif
+  return '';
+}
+
+async function registerUniPushCidOnce(reason) {
+  // #ifdef APP-PLUS
+  try {
+    if (pushRegisterInFlight) return;
+    pushRegisterInFlight = true;
+
+    const now = Date.now();
+    if (now - pushRegisterLastAttemptAt < 800) return;
+    pushRegisterLastAttemptAt = now;
+
+    const token = await getToken();
+    if (!token) {
+      logDebug('[notify] registerUniPushCid skipped: missing token (reason=' + reason + ')');
+      // 没 token 时也持续重试，等登录后即可自动注册
+      pushRegisterDelayMs = Math.min(10_000, Math.floor((pushRegisterDelayMs || 1500) * 1.5));
+      scheduleCidRegisterLoop('missingToken');
+      return;
+    }
+
+    let cid = await getUniPushCidAppPlus();
+    if (!cid) {
+      // 有些机型启动后 clientid 会延迟就绪，稍微重试
+      for (let i = 0; i < 10 && !cid; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 500));
+        // eslint-disable-next-line no-await-in-loop
+        cid = await getUniPushCidAppPlus();
+      }
+    }
+    if (!cid) {
+      logDebug('[notify] registerUniPushCid skipped: missing cid (reason=' + reason + ')');
+      pushRegisterDelayMs = Math.min(10_000, Math.floor((pushRegisterDelayMs || 1500) * 1.5));
+      scheduleCidRegisterLoop('missingCid');
+      return;
+    }
+
+    const registered = getRegisteredCidFromStorage();
+    if (registered === cid && pushRegisterLastOkAt > 0) {
+      // 已确认注册成功，停止循环
+      stopCidRegisterLoop();
+      return;
+    }
+
+    let platform = '';
+    try {
+      const sys = uni.getSystemInfoSync && uni.getSystemInfoSync();
+      platform = (sys && (sys.platform || sys.osName || sys.system)) || '';
+    } catch (e) {}
+
+    let appId = '';
+    try {
+      if (typeof plus !== 'undefined' && plus.runtime && plus.runtime.appid) appId = String(plus.runtime.appid);
+    } catch (e) {}
+
+    const url = getApiBase() + '/users/me/push/register';
+    logDebug('[notify] registerUniPushCid POST ' + url + ' cid=' + maskCid(cid) + ' reason=' + reason);
+
+    await new Promise((resolve, reject) => {
+      uni.request({
+        url,
+        method: 'POST',
+        header: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token
+        },
+        data: { cid, platform, appId },
+        success: (res) => {
+          if (res && res.statusCode >= 200 && res.statusCode < 300) return resolve(res);
+          let hint = '';
+          try {
+            const d = res && res.data;
+            hint = d ? (' body=' + JSON.stringify(d).slice(0, 300)) : '';
+          } catch (e) {}
+          return reject(new Error('register cid failed: status=' + (res && res.statusCode) + hint));
+        },
+        fail: (err) => reject(err)
+      });
+    });
+
+    // 注册成功：写入“已确认注册”的标记并停止重试
+    setRegisteredCidToStorage(cid);
+    pushRegisterLastOkAt = Date.now();
+    pushRegisterDelayMs = 1500;
+    stopCidRegisterLoop();
+    logDebug('[notify] registerUniPushCid ok cid=' + maskCid(cid));
+  } catch (e) {
+    logDebug('[notify] registerUniPushCid error: ' + (e?.message || e));
+    // 失败则指数退避继续尝试
+    pushRegisterDelayMs = Math.min(60_000, Math.floor((pushRegisterDelayMs || 1500) * 1.8));
+    scheduleCidRegisterLoop('retryAfterError');
+  } finally {
+    pushRegisterInFlight = false;
+  }
+  // #endif
+}
+
+function startCidRegisterLoop() {
+  // #ifdef APP-PLUS
+  // 启动一次循环：未成功时会自动退避重试；成功后停止。
+  // 每次启动都会先安排一次快速尝试。
+  kickCidRegisterLoop('start');
+  // #endif
+}
+
 function showMobileNotification(title, body) {
   try {
     const text = (body && String(body)) || '';
@@ -234,6 +445,9 @@ function showMobileNotification(title, body) {
 
 function startNotifyListener() {
   initAppStateTrackingOnce();
+  initNetworkTrackingOnce();
+  // App-Plus：尽早上报 UniPush cid，便于后端离线推送
+  try { startCidRegisterLoop(); } catch (e) {}
   const onNotify = (payload) => {
     try {
       logDebug('[notify] payload: ' + JSON.stringify(payload || {}));
@@ -284,6 +498,12 @@ function setTokenAndReconnect(token) {
     uni.setStorageSync('token', t);
     currentToken = t;
     logDebug('[notify] setTokenAndReconnect token set');
+    // token 更新后强制重试注册（可能是首次登录）
+    try {
+      clearRegisteredCidStorage();
+      pushRegisterLastOkAt = 0;
+      startCidRegisterLoop();
+    } catch (e) {}
     // uni-app 各端对“动态更新 auth 并 reconnect”的支持不一致，直接重建连接最稳。
     try {
       safeCloseSocket(socket);
