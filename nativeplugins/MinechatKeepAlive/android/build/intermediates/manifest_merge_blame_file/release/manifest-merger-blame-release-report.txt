@@ -1,0 +1,67 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="cn.org.agatha.minechat.keepalive" >
+4
+5    <uses-sdk android:minSdkVersion="21" />
+6
+7    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+7-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:5:5-81
+7-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:5:22-78
+8    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+8-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:6:5-77
+8-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:6:22-74
+9    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+9-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:7:5-87
+9-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:7:22-84
+10
+11    <application>
+11-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:9:5-31:19
+12        <receiver
+12-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:10:9-24:20
+13            android:name="cn.org.agatha.minechat.keepalive.BootReceiver"
+13-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:11:13-73
+14            android:directBootAware="true"
+14-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:14:13-43
+15            android:enabled="true"
+15-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:12:13-35
+16            android:exported="true" >
+16-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:13:13-36
+17            <intent-filter>
+17-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:15:13-23:29
+18                <action android:name="android.intent.action.BOOT_COMPLETED" />
+18-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:16:17-79
+18-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:16:25-76
+19                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+19-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:17:17-86
+19-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:17:25-83
+20                <action android:name="android.intent.action.USER_UNLOCKED" />
+20-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:18:17-78
+20-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:18:25-75
+21                <action android:name="android.intent.action.USER_PRESENT" />
+21-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:19:17-77
+21-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:19:25-74
+22                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+22-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:20:17-84
+22-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:20:25-81
+23                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+23-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:21:17-82
+23-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:21:25-79
+24                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+24-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:22:17-82
+24-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:22:25-79
+25            </intent-filter>
+26        </receiver>
+27
+28        <service
+28-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:26:9-30:56
+29            android:name="cn.org.agatha.minechat.keepalive.KeepAliveService"
+29-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:27:13-77
+30            android:enabled="true"
+30-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:28:13-35
+31            android:exported="false"
+31-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:29:13-37
+32            android:foregroundServiceType="dataSync" />
+32-->E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:30:13-53
+33    </application>
+34
+35</manifest>

@@ -1,0 +1,81 @@
+-- Merging decision tree log ---
+manifest
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:2:1-33:12
+INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:2:1-33:12
+	package
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:3:5-47
+		INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:5:5-81
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:5:22-78
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:6:5-77
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:6:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_DATA_SYNC
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:7:5-87
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:7:22-84
+application
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:9:5-31:19
+receiver#cn.org.agatha.minechat.keepalive.BootReceiver
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:10:9-24:20
+	android:enabled
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:12:13-35
+	android:exported
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:13:13-36
+	android:directBootAware
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:14:13-43
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:11:13-73
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.LOCKED_BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.QUICKBOOT_POWERON+action:name:android.intent.action.USER_PRESENT+action:name:android.intent.action.USER_UNLOCKED+action:name:com.htc.intent.action.QUICKBOOT_POWERON
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:15:13-23:29
+action#android.intent.action.BOOT_COMPLETED
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:16:17-79
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:16:25-76
+action#android.intent.action.LOCKED_BOOT_COMPLETED
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:17:17-86
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:17:25-83
+action#android.intent.action.USER_UNLOCKED
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:18:17-78
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:18:25-75
+action#android.intent.action.USER_PRESENT
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:19:17-77
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:19:25-74
+action#android.intent.action.MY_PACKAGE_REPLACED
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:20:17-84
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:20:25-81
+action#android.intent.action.QUICKBOOT_POWERON
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:21:17-82
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:21:25-79
+action#com.htc.intent.action.QUICKBOOT_POWERON
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:22:17-82
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:22:25-79
+service#cn.org.agatha.minechat.keepalive.KeepAliveService
+ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:26:9-30:56
+	android:enabled
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:28:13-35
+	android:exported
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:29:13-37
+	android:foregroundServiceType
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:30:13-53
+	android:name
+		ADDED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml:27:13-77
+uses-sdk
+INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml
+INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\AndroidManifest.xml

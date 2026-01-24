@@ -1,7 +1,25 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // 本地自动化构建 AAR 时使用。云打包仅消费 AAR，本 build.gradle 不参与云端编译。
+        classpath 'com.android.tools.build:gradle:8.2.2'
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
 apply plugin: 'com.android.library'
 
 android {
+    namespace 'cn.org.agatha.minechat.keepalive'
     compileSdkVersion 33
+    buildToolsVersion '34.0.0'
 
     defaultConfig {
         minSdkVersion 21
@@ -15,6 +33,61 @@ android {
     }
 }
 
+// 让输出 aar 名称更稳定（通常会生成 MinechatKeepAlive-release.aar）
+archivesBaseName = 'MinechatKeepAlive'
+
+def uniappStubsSrcDir = file("${projectDir}/stubs-src")
+def uniappStubsClassesDir = file("${buildDir}/uniapp-stubs/classes")
+def uniappStubsJarFile = file("${buildDir}/uniapp-stubs/uniapp-stubs.jar")
+
+def javaHomeDir = file(System.getProperty('java.home'))
+def javaBinDir = file(new File(javaHomeDir, 'bin'))
+def javacBin = new File(javaBinDir, org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'javac.exe' : 'javac').absolutePath
+def jarBin = new File(javaBinDir, org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'jar.exe' : 'jar').absolutePath
+
+tasks.register('buildUniappStubsJar') {
+    inputs.dir(uniappStubsSrcDir)
+    outputs.file(uniappStubsJarFile)
+    doLast {
+        if (!uniappStubsSrcDir.exists()) {
+            throw new GradleException("Missing stub sources: ${uniappStubsSrcDir}")
+        }
+
+        uniappStubsClassesDir.mkdirs()
+        uniappStubsJarFile.parentFile.mkdirs()
+
+        def stubJavaFiles = fileTree(uniappStubsSrcDir).matching { include '**/*.java' }.files
+        if (stubJavaFiles.isEmpty()) {
+            throw new GradleException("No stub java files found under: ${uniappStubsSrcDir}")
+        }
+
+        exec {
+            commandLine(
+                javacBin,
+                '-source', '8',
+                '-target', '8',
+                '-encoding', 'UTF-8',
+                '-d', uniappStubsClassesDir.absolutePath,
+                *stubJavaFiles.collect { it.absolutePath }
+            )
+        }
+
+        exec {
+            commandLine(
+                jarBin,
+                'cf', uniappStubsJarFile.absolutePath,
+                '-C', uniappStubsClassesDir.absolutePath,
+                '.'
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == 'preBuild' }.configureEach {
+    dependsOn(tasks.named('buildUniappStubsJar'))
+}
+
 dependencies {
-    // 无第三方依赖
+    // 用于本地/CI 编译通过（不会被打进 AAR，避免与真机运行时的 uni SDK 冲突）
+    compileOnly files(uniappStubsJarFile)
 }

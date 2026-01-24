@@ -1,0 +1,7 @@
+cn.org.agatha.minechat.keepalive-pngs-0 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\build\generated\res\pngs\release
+cn.org.agatha.minechat.keepalive-resValues-1 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\build\generated\res\resValues\release
+cn.org.agatha.minechat.keepalive-mergeReleaseResources-2 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+cn.org.agatha.minechat.keepalive-mergeReleaseResources-3 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+cn.org.agatha.minechat.keepalive-merged_res-4 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\build\intermediates\merged_res\release
+cn.org.agatha.minechat.keepalive-main-5 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\main\res
+cn.org.agatha.minechat.keepalive-release-6 E:\Dev\MinechatUniapp\nativeplugins\MinechatKeepAlive\android\src\release\res

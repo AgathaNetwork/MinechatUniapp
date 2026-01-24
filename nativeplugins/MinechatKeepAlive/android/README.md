@@ -19,3 +19,13 @@
 - AAR 是否真的存在于本目录
 - AAR 内 `classes.jar` 是否包含 `cn.org.agatha.minechat.keepalive` 与 `cn.org.agatha.minechat.keepalive.uni` 的 class
 - `package.json` 的 `class` 是否与 AAR 中的类全名一致
+
+## 一键生成 AAR（Windows，可选）
+
+如果你不想手工搭 Android Studio 工程，这个仓库提供了脚本，会自动下载 Android SDK 到项目目录下的 `.cache`，并编译 AAR：
+
+- 生成/刷新 AAR：`npm run build:keepalive-aar`
+- 如果你在 PowerShell 里运行 `npm` 提示“禁止运行脚本”，可改用：`npm.cmd run build:keepalive-aar` 或直接执行 `scripts/build-keepalive-aar.cmd`
+- 输出路径：`nativeplugins/MinechatKeepAlive/android/MinechatKeepAlive.aar`
+
+另外，`npm run build:app-plus` 已经把该命令挂到了 `prebuild:app-plus`，所以走 CLI 编译 app-plus 时会自动刷新 AAR。
