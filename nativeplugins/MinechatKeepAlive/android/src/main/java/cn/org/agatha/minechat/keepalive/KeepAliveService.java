@@ -8,22 +8,74 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import cn.org.agatha.minechat.keepalive.notify.NotifySocketManager;
 
 public class KeepAliveService extends Service {
     private static final String CHANNEL_ID = "minechat_keepalive";
     private static final int NOTIFICATION_ID = 10301;
+
+    private final NotifySocketManager notifySocketManager = new NotifySocketManager();
+    private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private final Runnable ticker = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                notifySocketManager.refresh(getApplicationContext());
+            } catch (Throwable ignored) {
+            }
+            try {
+                // 更新前台通知内容（展示通知连接状态）
+                startForeground(NOTIFICATION_ID, buildNotification());
+            } catch (Throwable ignored) {
+            }
+
+            try {
+                handler.postDelayed(this, 10_000);
+            } catch (Throwable ignored) {
+            }
+        }
+    };
 
     @Override
     public void onCreate() {
         super.onCreate();
         ensureChannel();
         startForeground(NOTIFICATION_ID, buildNotification());
+
+        // 尽早拉起原生通知 socket（若已配置 token/wsBase）
+        try {
+            notifySocketManager.refresh(getApplicationContext());
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            handler.postDelayed(ticker, 2_000);
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override
     public void onDestroy() {
         try {
             removeForegroundNotification();
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            notifySocketManager.stop();
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            handler.removeCallbacks(ticker);
         } catch (Throwable ignored) {
         }
         super.onDestroy();
@@ -44,6 +96,12 @@ public class KeepAliveService extends Service {
         try {
             ensureChannel();
             startForeground(NOTIFICATION_ID, buildNotification());
+        } catch (Throwable ignored) {
+        }
+
+        // 每次启动/重启都刷新一次配置，确保 token 更新后生效
+        try {
+            notifySocketManager.refresh(getApplicationContext());
         } catch (Throwable ignored) {
         }
         return START_STICKY;
@@ -89,17 +147,33 @@ public class KeepAliveService extends Service {
     }
 
     private Notification buildNotification() {
+        String status = "";
+        try {
+            status = notifySocketManager.getStatusText(getApplicationContext());
+        } catch (Throwable ignored) {
+        }
+
+        String nowText = "";
+        try {
+            nowText = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        } catch (Throwable ignored) {
+        }
+
+        String text = "还活着" + (nowText.isEmpty() ? "" : (" " + nowText));
+        if (status != null && !status.trim().isEmpty()) {
+            text = text + " | " + status.trim();
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return new Notification.Builder(this, CHANNEL_ID)
                     .setContentTitle("Minechat")
-                    .setContentText("后台运行中")
+                    .setContentText(text)
                     .setOngoing(true)
                     .setSmallIcon(android.R.drawable.stat_notify_chat)
                     .build();
         }
         return new Notification.Builder(this)
                 .setContentTitle("Minechat")
-                .setContentText("后台运行中")
+                .setContentText(text)
                 .setOngoing(true)
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
                 .build();

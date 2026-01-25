@@ -90,4 +90,10 @@ tasks.matching { it.name == 'preBuild' }.configureEach {
 dependencies {
     // 用于本地/CI 编译通过（不会被打进 AAR，避免与真机运行时的 uni SDK 冲突）
     compileOnly files(uniappStubsJarFile)
+
+    // 原生常驻通知 socket（本地编译 AAR 用）
+    implementation('io.socket:socket.io-client:2.1.0') {
+        // 避免与 Android 自带/其他库的 org.json 冲突
+        exclude group: 'org.json', module: 'json'
+    }
 }

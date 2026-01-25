@@ -13,7 +13,98 @@ let pushRegisterLastAttemptAt = 0;
 let pushRegisterLastOkAt = 0;
 let networkListenerInited = false;
 
+let nativeKeepAlive = null;
+let androidNotifPermChecked = false;
+let nativeSyncTimer = null;
+let nativeSyncOk = false;
+
 const WS_BASE = 'https://front-dev.agatha.org.cn';
+
+function ensureAndroidNotificationPermissionOnce() {
+  // #ifdef APP-PLUS
+  try {
+    if (androidNotifPermChecked) return;
+    androidNotifPermChecked = true;
+
+    const Build = plus.android.importClass('android.os.Build');
+    const main = plus.android.runtimeMainActivity();
+    if (!Build || !main) return;
+    if (Build.VERSION.SDK_INT < 33) return;
+
+    const PackageManager = plus.android.importClass('android.content.pm.PackageManager');
+    const permission = 'android.permission.POST_NOTIFICATIONS';
+    let granted = false;
+    try {
+      granted = (main.checkSelfPermission(permission) === PackageManager.PERMISSION_GRANTED);
+    } catch (e) {
+      // 某些内核不支持 checkSelfPermission；直接尝试申请
+      granted = false;
+    }
+    if (granted) return;
+
+    logDebug('[notify] requesting POST_NOTIFICATIONS permission');
+    plus.android.requestPermissions(
+      [permission],
+      (res) => {
+        try { logDebug('[notify] POST_NOTIFICATIONS granted: ' + JSON.stringify(res || {})); } catch (e) {}
+      },
+      (err) => {
+        try { logDebug('[notify] POST_NOTIFICATIONS denied: ' + JSON.stringify(err || {})); } catch (e) {}
+        // 用户拒绝后，允许下次 onAppShow 再提示一次
+        androidNotifPermChecked = false;
+      }
+    );
+  } catch (e) {
+    // ignore
+  }
+  // #endif
+}
+
+function trySyncNativeNotifyConfig(tokenOverride) {
+  // #ifdef APP-PLUS
+  try {
+    if (!nativeKeepAlive && uni && typeof uni.requireNativePlugin === 'function') {
+      nativeKeepAlive = uni.requireNativePlugin('MinechatKeepAlive');
+    }
+    if (!nativeKeepAlive) return false;
+    if (typeof nativeKeepAlive.setNotifyConfig !== 'function' || typeof nativeKeepAlive.setNotifyToken !== 'function') {
+      return false;
+    }
+
+    // 固定与前端一致的 path（front-dev 反代下走 /api/notify）
+    const ok1 = nativeKeepAlive.setNotifyConfig(WS_BASE, '/api/notify');
+    const token = typeof tokenOverride === 'string' ? tokenOverride : (uni.getStorageSync('token') || '');
+    const ok2 = nativeKeepAlive.setNotifyToken(String(token || ''));
+    logDebug('[notify] native notify sync result: setNotifyConfig=' + ok1 + ' setNotifyToken=' + ok2);
+
+    // 兼容：部分端原生模块方法可能返回 undefined，但只要没抛异常一般就是成功
+    if (ok1 !== false && ok2 !== false) {
+      logDebug('[notify] using native notify socket (APP-PLUS)');
+      return true;
+    }
+    return false;
+  } catch (e) {
+    logDebug('[notify] trySyncNativeNotifyConfig error: ' + (e?.message || e));
+    return false;
+  }
+  // #endif
+  return false;
+}
+
+function startNativeSyncLoopOnce() {
+  // #ifdef APP-PLUS
+  try {
+    if (nativeSyncTimer) return;
+    nativeSyncTimer = setInterval(() => {
+      if (nativeSyncOk) return;
+      try {
+        const ok = trySyncNativeNotifyConfig();
+        if (ok) nativeSyncOk = true;
+      } catch (e) {}
+    }, 5000);
+  } catch (e) {}
+  // #endif
+}
 
 function getApiBase() {
   // front-dev 上通常会把 /api 反代到后端
@@ -452,8 +543,26 @@ function showMobileNotification(title, body) {
 function startNotifyListener() {
   initAppStateTrackingOnce();
   initNetworkTrackingOnce();
+
+  // APP-PLUS: 尽早检查通知权限（Android 13+ 需要运行时授权）
+  try { ensureAndroidNotificationPermissionOnce(); } catch (e) {}
+
   // App-Plus：尽早上报 UniPush cid，便于后端离线推送
   try { startCidRegisterLoop(); } catch (e) {}
+
+  // APP-PLUS：持续重试把 token/wsBase 同步给原生（避免启动时序问题导致一直“未配置”）
+  try { startNativeSyncLoopOnce(); } catch (e) {}
+
+  // APP-PLUS：把 socket 长连接交给原生前台服务托管（随保活同生命周期）
+  if (trySyncNativeNotifyConfig()) {
+    nativeSyncOk = true;
+    try {
+      safeCloseSocket(socket);
+    } catch (e) {}
+    socket = null;
+    return;
+  }
+
   const onNotify = (payload) => {
     try {
       logDebug('[notify] payload: ' + JSON.stringify(payload || {}));
@@ -504,6 +613,9 @@ function setTokenAndReconnect(token) {
     uni.setStorageSync('token', t);
     currentToken = t;
     logDebug('[notify] setTokenAndReconnect token set');
+
+    // APP-PLUS: token 更新时再触发一次权限检查
+    try { ensureAndroidNotificationPermissionOnce(); } catch (e) {}
     // token 更新后强制重试注册（可能是首次登录）
     try {
       clearRegisteredCidStorage();
@@ -515,6 +627,12 @@ function setTokenAndReconnect(token) {
       safeCloseSocket(socket);
     } catch (e) {}
     socket = null;
+
+    // APP-PLUS：优先同步到原生前台服务，让它负责常驻通知
+    if (trySyncNativeNotifyConfig(t)) {
+      return;
+    }
+
     connectNotifySocket(onNotifyCallback);
   } catch (e) { console.error('[notify] setTokenAndReconnect error', e); }
 }

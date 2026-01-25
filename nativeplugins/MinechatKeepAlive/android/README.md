@@ -5,6 +5,17 @@
 - 将本插件编译产物 `MinechatKeepAlive.aar` 放到本目录（即 `nativeplugins/MinechatKeepAlive/android/`）
 - 不要把 `uniapp-v8-release.aar` / `uniapp-release.aar` 放进来（官方文档明确会冲突）
 
+## 新增：原生通知 socket 托管
+
+本插件的 `KeepAliveService` 现在会在前台服务存活期间托管一条 socket.io 连接（事件：`notify.message`），用于在 Android 后台也能持续收到消息并弹出系统通知。
+
+JS 侧需要在登录/Token 变化时把配置同步给原生：
+
+- `MinechatKeepAlive.setNotifyConfig(wsBase, socketPath)`
+- `MinechatKeepAlive.setNotifyToken(token)`
+
+注意：这要求你用当前源码重新编译 AAR（并确保云打包能拉取 `io.socket:socket.io-client` 依赖）。
+
 当前插件注册信息在：
 - `nativeplugins/MinechatKeepAlive/package.json`：`integrateType` 已设置为 `aar`
 - `src/manifest.json`：已注册 `app-plus.plugins.MinechatKeepAlive`

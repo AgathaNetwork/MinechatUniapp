@@ -24,3 +24,10 @@ yarn-error.log*
 .hbuilderx
 package-lock.json
 .cache/
+
+# MinechatKeepAlive (android aar local build artifacts)
+nativeplugins/MinechatKeepAlive/android/.gradle/
+nativeplugins/MinechatKeepAlive/android/build/
+nativeplugins/MinechatKeepAlive/android/local.properties
+
+nativeplugins/MinechatKeepAlive/android/.gradle
