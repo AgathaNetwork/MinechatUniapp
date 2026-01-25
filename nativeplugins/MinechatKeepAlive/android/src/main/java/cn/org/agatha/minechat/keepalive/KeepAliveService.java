@@ -21,6 +21,25 @@ public class KeepAliveService extends Service {
     }
 
     @Override
+    public void onDestroy() {
+        try {
+            removeForegroundNotification();
+        } catch (Throwable ignored) {
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // 当用户从最近任务划掉/系统移除任务时，尽量把通知也移除
+        try {
+            removeForegroundNotification();
+        } catch (Throwable ignored) {
+        }
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         try {
             ensureChannel();
@@ -47,6 +66,24 @@ public class KeepAliveService extends Service {
             );
             ch.setDescription("用于保持 Minechat 在后台运行（显示常驻通知）");
             nm.createNotificationChannel(ch);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void removeForegroundNotification() {
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                // true 表示移除通知
+                stopForeground(true);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NOTIFICATION_ID);
         } catch (Throwable ignored) {
         }
     }
